@@ -1,15 +1,42 @@
-import { Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { User } from './entities/user.entity';
 
 @Injectable()
 export class UserService {
-  create(createUserDto: CreateUserDto) {
-    return 'This action adds a new user';
+  // 使用InjectRepository装饰器并引入Repository即可使用typeorm的操作
+  constructor(
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
+  ) {}
+
+  async register(createUserDto: CreateUserDto) {
+    const { username } = createUserDto;
+
+    const existUser = await this.userRepository.findOne({
+      where: { username },
+    });
+    if (existUser) {
+      return {
+        result_code: 'user_already_exist',
+        message: 'user already exist',
+      };
+    }
+
+    const newUser = await this.userRepository.create(createUserDto);
+    return await this.userRepository.save(newUser);
   }
 
-  findAll() {
-    return `This action returns all user`;
+  async findAll() {
+    const list = await this.userRepository.query('select * from user');
+    const total = await this.userRepository.query(
+      `select * from user where isActivated = 1`,
+    );
+    console.log(total);
+    return { data: { list, total } };
   }
 
   findOne(id: number) {
@@ -20,7 +47,18 @@ export class UserService {
     return `This action updates a #${id} user`;
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} user`;
+  async remove(id: number) {
+    const isExisted = await this.userRepository.query(
+      `SELECT id FROM user WHERE id = ${id} and isActivated = 1`,
+    );
+    if (!isExisted.length) {
+      return { result_code: 'user_not_found', message: 'user may not exist' };
+    } else {
+      const res = await this.userRepository.query(
+        `UPDATE user set isActivated = 0 WHERE id = ${id}`,
+      );
+    }
+
+    return {};
   }
 }
