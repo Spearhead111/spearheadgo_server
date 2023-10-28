@@ -5,7 +5,7 @@ import * as bcrypt from 'bcryptjs';
 @Entity()
 export class User {
   @PrimaryGeneratedColumn('uuid')
-  id: number;
+  id: string;
 
   @Column({ length: 100 })
   username: string; // 用户名
@@ -17,10 +17,10 @@ export class User {
   email: string;
 
   @Exclude()
-  @Column()
+  @Column({ select: false })
   password: string;
 
-  @Column()
+  @Column({ default: '' })
   avatar: string;
 
   @Column('simple-enum', {

@@ -18,10 +18,10 @@ import { AuthService } from './auth.service';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  @UseGuards(AuthGuard('local'))
-  @UseInterceptors(ClassSerializerInterceptor)
   @Post('login')
-  async login(@Body() user: LoginDto, @Req() req) {
+  @UseInterceptors(ClassSerializerInterceptor)
+  @UseGuards(AuthGuard('local'))
+  async login(@Body() user: LoginDto) {
     return this.authService.login(user);
   }
 }

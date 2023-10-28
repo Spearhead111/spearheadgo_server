@@ -5,8 +5,9 @@ import { User } from 'src/modules/user/entities/user.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { BadRequestException } from '@nestjs/common';
+import { Base64 } from 'js-base64';
 
-export class LocalStorage extends PassportStrategy(Strategy) {
+export class LocalStrategy extends PassportStrategy(Strategy) {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
@@ -18,6 +19,7 @@ export class LocalStorage extends PassportStrategy(Strategy) {
   }
 
   async validate(username: string, password: string) {
+    console.log(1111111);
     const user = await this.userRepository
       .createQueryBuilder('user')
       .addSelect('user.password')
@@ -25,19 +27,13 @@ export class LocalStorage extends PassportStrategy(Strategy) {
       .getOne();
 
     if (!user) {
-      return {
-        result_code: 'account_not_found',
-        message: 'account not found',
-      };
+      throw new BadRequestException('用户名不正确！');
+    }
+    const decodedPassword = Base64.decode(Base64.decode(password));
+    if (!compareSync(decodedPassword, user.password)) {
+      throw new BadRequestException('密码不正确！');
     }
 
-    if (!compareSync(password, user.password)) {
-      return {
-        result_code: 'password_wrong',
-        message: 'password wrong',
-      };
-    }
-
-    return user;
+    return true;
   }
 }

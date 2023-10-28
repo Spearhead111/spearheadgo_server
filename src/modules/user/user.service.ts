@@ -19,6 +19,7 @@ export class UserService {
     const existUser = await this.userRepository.findOne({
       where: { username },
     });
+
     if (existUser) {
       return {
         result_code: 'user_already_exist',
@@ -35,19 +36,28 @@ export class UserService {
     const total = await this.userRepository.query(
       `select * from user where isActivated = 1`,
     );
-    console.log(total);
     return { data: { list, total } };
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} user`;
+  async findOne(id: string) {
+    const user = await this.userRepository.findOne({
+      where: { id },
+    });
+    return user;
   }
 
-  update(id: number, updateUserDto: UpdateUserDto) {
+  async findUserById(id: string) {
+    const user = await this.userRepository.findOne({
+      where: { id },
+    });
+    return user;
+  }
+
+  update(id: string, updateUserDto: UpdateUserDto) {
     return `This action updates a #${id} user`;
   }
 
-  async remove(id: number) {
+  async remove(id: string) {
     const isExisted = await this.userRepository.query(
       `SELECT id FROM user WHERE id = ${id} and isActivated = 1`,
     );

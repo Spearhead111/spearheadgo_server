@@ -7,7 +7,7 @@ import { User } from '../user/entities/user.entity';
 import { Repository } from 'typeorm';
 import { AuthService } from './auth.service';
 
-export class JwtStorage extends PassportStrategy(Strategy) {
+export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
@@ -16,14 +16,15 @@ export class JwtStorage extends PassportStrategy(Strategy) {
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      ignoreExpiration: false,
       secretOrKey: configService.get('SECRET'),
     } as StrategyOptions);
   }
 
-  async validate(user: User) {
-    const existUser = await this.authService.getUser(user);
+  async validate(payload: any) {
+    const existUser = await this.authService.getUser(payload);
     if (!existUser) {
-      throw new UnauthorizedException('token不正确');
+      throw new UnauthorizedException('用户信息变更,请重新登录');
     }
     return existUser;
   }

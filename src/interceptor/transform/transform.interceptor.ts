@@ -40,9 +40,9 @@ export class TransformInterceptor<T>
   ): Observable<SuccessResponse<T>> {
     return next.handle().pipe(
       map((data) => ({
-        result_code: data?.result_code || 'sucess',
+        result_code: data?.result_code || 'success',
         message: data?.message || 'success',
-        data: data.data,
+        data: data?.data || {},
       })),
     );
   }

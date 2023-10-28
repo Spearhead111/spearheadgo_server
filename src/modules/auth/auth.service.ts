@@ -13,11 +13,15 @@ export class AuthService {
   ) {}
 
   async login(user: Partial<User>) {
+    const { username } = user;
+    const userInfo = await this.userRepository.findOne({
+      where: { username },
+    });
     const token = this.createToken({
-      id: user.id,
-      username: user.username,
-      role: user.role,
-      avatar: user.avatar,
+      id: userInfo.id,
+      username: userInfo.username,
+      role: userInfo.role,
+      avatar: userInfo.avatar,
     });
 
     return { data: { token } };
@@ -29,9 +33,9 @@ export class AuthService {
   }
 
   async getUser(user: Partial<User>) {
-    const { id } = user;
+    const { username, id, role } = user;
     const existUser = await this.userRepository.findOne({
-      where: { id },
+      where: { username, id, role },
     });
     return !!existUser;
   }
