@@ -4,6 +4,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './entities/user.entity';
+import { Base64 } from 'js-base64';
 
 @Injectable()
 export class UserService {
@@ -19,7 +20,10 @@ export class UserService {
     const existUser = await this.userRepository.findOne({
       where: { username },
     });
-
+    // 解码密码
+    createUserDto.password = Base64.decode(
+      Base64.decode(createUserDto.password),
+    );
     if (existUser) {
       return {
         result_code: 'user_already_exist',

@@ -23,9 +23,11 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
 
   async validate(payload: any) {
     const existUser = await this.authService.getUser(payload);
+    console.log('jwt');
     if (!existUser) {
       throw new UnauthorizedException('用户信息变更,请重新登录');
     }
+    // 返回校验的user，后续只要使用了jwt校验的都能从req.user中获取用户信息
     return existUser;
   }
 }

@@ -19,7 +19,6 @@ export class LocalStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(username: string, password: string) {
-    console.log(1111111);
     const user = await this.userRepository
       .createQueryBuilder('user')
       .addSelect('user.password')
@@ -30,6 +29,7 @@ export class LocalStrategy extends PassportStrategy(Strategy) {
       throw new BadRequestException('用户名不正确！');
     }
     const decodedPassword = Base64.decode(Base64.decode(password));
+    console.log(password, decodedPassword);
     if (!compareSync(decodedPassword, user.password)) {
       throw new BadRequestException('密码不正确！');
     }

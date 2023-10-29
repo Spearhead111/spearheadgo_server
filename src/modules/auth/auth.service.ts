@@ -12,6 +12,12 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
+  async verify() {
+    return {
+      message: 'access',
+    };
+  }
+
   async login(user: Partial<User>) {
     const { username } = user;
     const userInfo = await this.userRepository.findOne({
@@ -20,10 +26,11 @@ export class AuthService {
     const token = this.createToken({
       id: userInfo.id,
       username: userInfo.username,
+      nickname: userInfo.nickname,
       role: userInfo.role,
       avatar: userInfo.avatar,
     });
-
+    // 帮前端直接拼接上'Bearer '
     return { data: { token } };
   }
 
@@ -37,6 +44,6 @@ export class AuthService {
     const existUser = await this.userRepository.findOne({
       where: { username, id, role },
     });
-    return !!existUser;
+    return existUser;
   }
 }

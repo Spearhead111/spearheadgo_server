@@ -23,14 +23,11 @@ export class RolesGuard implements CanActivate {
     }
     const request = context.switchToHttp().getRequest();
     // 从请求头获取用户id
-    const id = request.headers['user-id'];
-    if (!id) {
+    const { role } = request.user;
+    if (!role) {
       throw new ForbiddenException('无权限，请联系管理员');
     }
-    // 使用数据库服务查询用户
-    const user = await this.userService.findUserById(id);
-    const userRole = user.role.split(',');
-    if (!judegAuth(roles, userRole)) {
+    if (!judegAuth(roles, role)) {
       throw new ForbiddenException('无权限，请联系管理员');
     }
     return true;

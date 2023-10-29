@@ -1,16 +1,24 @@
-import { Entity, Column, PrimaryGeneratedColumn, BeforeInsert } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  BeforeInsert,
+  OneToMany,
+  Timestamp,
+} from 'typeorm';
 import { Exclude } from 'class-transformer';
 import * as bcrypt from 'bcryptjs';
+import { Article } from 'src/modules/article/entities/article.entity';
 
 @Entity()
 export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ length: 100 })
+  @Column({ length: 20 })
   username: string; // 用户名
 
-  @Column({ length: 100 })
+  @Column({ length: 20 })
   nickname: string; // 昵称
 
   @Column()
@@ -30,7 +38,7 @@ export class User {
   role: string; // 用户角色
 
   // 用来指代用户是否删除
-  @Column({ default: 1 })
+  @Column({ type: 'tinyint', default: 1 })
   isActivated: number;
 
   @Column({
@@ -38,14 +46,18 @@ export class User {
     type: 'timestamp',
     default: () => 'CURRENT_TIMESTAMP',
   })
-  createTime: Date;
+  createTime: Timestamp;
 
   @Column({
     name: 'update_time',
     type: 'timestamp',
     default: () => 'CURRENT_TIMESTAMP',
   })
-  updateTime: Date;
+  updateTime: Timestamp;
+
+  // 建立反向关系，表示一个用户可以有多篇文章
+  @OneToMany(() => Article, (article) => article.author)
+  articles: Article[];
 
   @BeforeInsert()
   async encryptPwd() {

@@ -10,7 +10,9 @@ import { TypeOrmModule, TypeOrmModuleOptions } from '@nestjs/typeorm';
 import { ConfigEnum } from './config/config.enum';
 import { AuthModule } from './modules/auth/auth.module';
 import { User } from './modules/user/entities/user.entity';
-import { CorsOptions } from '@nestjs/common/interfaces/external/cors-options.interface';
+import { CategoryModule } from './modules/category/category.module';
+import { Article } from './modules/article/entities/article.entity';
+import { Category } from './modules/category/entities/category.entity';
 
 const envFilePath = `.env.${process.env.NODE_ENV || `development`}`;
 
@@ -45,7 +47,7 @@ const envFilePath = `.env.${process.env.NODE_ENV || `development`}`;
           username: configService.get(ConfigEnum.DB_USERNAME),
           password: configService.get(ConfigEnum.DB_PASSWORD),
           database: configService.get(ConfigEnum.DB_DATABASE),
-          entities: [User],
+          entities: [User, Article, Category],
           // 同步本地的schema与数据库 -> 初始化的时候去使用
           synchronize: configService.get(ConfigEnum.DB_SYNC),
           logging: process.env.NODE_ENV === 'development',
@@ -55,6 +57,7 @@ const envFilePath = `.env.${process.env.NODE_ENV || `development`}`;
     UserModule,
     ArticleModule,
     AuthModule,
+    CategoryModule,
   ],
   controllers: [AppController],
   providers: [AppService],

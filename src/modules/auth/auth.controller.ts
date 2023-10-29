@@ -24,4 +24,10 @@ export class AuthController {
   async login(@Body() user: LoginDto) {
     return this.authService.login(user);
   }
+
+  @Get('verify')
+  @UseGuards(AuthGuard('jwt'))
+  async verify() {
+    return this.authService.verify();
+  }
 }

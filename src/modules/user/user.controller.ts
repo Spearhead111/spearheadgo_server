@@ -14,10 +14,11 @@ import { UserService } from './user.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { LoginUserDto } from './dto/login-user.dto';
-import { ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from 'src/guard/roles/roles.guard';
 
+@ApiTags('用户')
 @Controller('user')
 export class UserController {
   constructor(private readonly userService: UserService) {}
@@ -29,7 +30,7 @@ export class UserController {
 
   // 获取所有用户列表
   @Get('get-user-list')
-  @UseGuards(AuthGuard('jwt'),)
+  @UseGuards(AuthGuard('jwt'))
   @SetMetadata('roles', ['root']) // 需要root权限
   findAll() {
     return this.userService.findAll();
