@@ -9,6 +9,8 @@ import {
 import { Exclude } from 'class-transformer';
 import * as bcrypt from 'bcryptjs';
 import { Article } from 'src/modules/article/entities/article.entity';
+import { ArticleComments } from 'src/modules/article/entities/articleComments.entity';
+import { ArticleLikes } from 'src/modules/article/entities/articleLike.entity';
 
 @Entity()
 export class User {
@@ -59,9 +61,17 @@ export class User {
   @OneToMany(() => Article, (article) => article.author)
   articles: Article[];
 
+  // 与评论的关系
+  @OneToMany(() => ArticleComments, (articleComments) => articleComments.user)
+  articleComments: ArticleComments[];
+
+  // 与点赞的关系
+  @OneToMany(() => ArticleLikes, (articleLikes) => articleLikes.user)
+  articleLikes: ArticleLikes[];
+
   @BeforeInsert()
   async encryptPwd() {
-    this.password = await bcrypt.hashSync(this.password);
+    this.password = bcrypt.hashSync(this.password);
     this.nickname = this.username;
   }
 }

@@ -13,6 +13,9 @@ export class Category {
   @PrimaryGeneratedColumn()
   id: number;
 
+  @Column({ length: 20 })
+  code: string;
+
   @Column({ length: 10 })
   label: string;
 
@@ -22,14 +25,10 @@ export class Category {
   @Column({ length: 50 })
   icon: string;
 
-  @Column({ length: 10 })
+  @Column({ name: 'icon_color', length: 10 })
   iconColor: string;
-
-  @Column({ length: 20 })
-  code: string;
 
   // 定义多对多关系，一个分类可以包含多篇文章
   @ManyToMany(() => Article, (article) => article.categories)
-  @JoinTable() // 使用 JoinTable 来指定关联表
   articles: Article[];
 }

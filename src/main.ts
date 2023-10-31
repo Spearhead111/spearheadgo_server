@@ -5,6 +5,7 @@ import { TransformInterceptor } from './interceptor/transform/transform.intercep
 import rateLimit from 'express-rate-limit';
 import * as cors from 'cors';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import 'reflect-metadata';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);

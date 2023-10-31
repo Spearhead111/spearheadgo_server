@@ -55,9 +55,10 @@ export class ArticleController {
   update(
     @Param('article_id') id: string,
     @Body() updateArticleDto: UpdateArticleDto,
+    @Req() { user },
   ) {
     console.log(id, updateArticleDto);
-    return this.articleService.update(+id, updateArticleDto);
+    return this.articleService.update(+id, updateArticleDto, user.id);
   }
 
   /** 删除文章 */
