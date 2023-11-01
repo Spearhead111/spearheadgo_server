@@ -27,7 +27,7 @@ export class Article {
   @Column({ length: 20 })
   subtitle: string;
 
-  @Column({ name: 'description', length: 20 })
+  @Column({ name: 'description', length: 100 })
   desc: string;
 
   @Column()
@@ -70,15 +70,6 @@ export class Article {
     type: 'timestamp',
   })
   updateTime: Timestamp;
-
-  // @Column({ type: 'int', default: 0 })
-  // view: number;
-
-  // @Column({ type: 'int', default: 0 })
-  // comments: number;
-
-  // @Column({ type: 'int', default: 0 })
-  // like: number;
 
   @Column({ type: 'tinyint', default: 1 })
   isActivated: number;

@@ -31,10 +31,10 @@ export class ArticleService {
 
   /** 查询所有没删除的文章 */
   async getArticleList(searchArticleDto: SearchArticleDto) {
-    const { pageNo, pageSize, search } = searchArticleDto;
+    const { pageNo, tagIdList, pageSize, search } = searchArticleDto;
     const skip = (pageNo - 1) * pageSize;
 
-    const articles = await this.articleRepository
+    let query = this.articleRepository
       .createQueryBuilder('article')
       .leftJoinAndSelect('article.author', 'author')
       .leftJoinAndSelect('article.articleComments', 'comments')
@@ -56,33 +56,45 @@ export class ArticleService {
       .where('article.title LIKE :keyword', { keyword: `%${search}%` })
       .orWhere('article.subtitle LIKE :keyword', { keyword: `%${search}%` })
       .orWhere('article.desc LIKE :keyword', { keyword: `%${search}%` })
-      .where({ isActivated: 1 }) // 只查没被删除的文章  这个一定是写在前面模糊匹配之后的
+      .where({ isActivated: 1 }); // 只查没被删除的文章  这个一定是写在前面模糊匹配之后的
+
+    // 如果有文章标签限制加一个where
+    if (tagIdList?.length) {
+      query = query.andWhere('categories.id IN (:...ids)', { ids: tagIdList });
+    }
+
+    const articles = await query
       .groupBy('article.id') // 添加 GROUP BY 子句以满足聚合要求
       .orderBy('article.id', 'DESC') // 按文章的id降序(新的在上面)
       .offset(skip)
       .limit(pageSize)
       .getRawMany();
 
+    if (!articles?.length) {
+      return { data: { list: [], total: 0 } };
+    }
     // 查询文章的类别信息
-    const articleIds = articles.map((article) => article.id);
-    const articleCategories = await this.articleRepository
+    const articleIds = articles.map((article) => article.article_id);
+    const categoriesList = await this.articleRepository
       .createQueryBuilder('article')
       .leftJoin('article.categories', 'categories')
-      .select(['categories'])
+      .select(['article.id', 'categories'])
       .where('article.id IN (:...ids)', { ids: articleIds })
-      .getRawMany();
+      .getMany();
+
+    console.log(categoriesList);
 
     // 将类别信息关联到文章对象中
     articles.forEach((article) => {
       // 在这里做一下转换吧 把字符串转数字
       article.comments = Number(article.comments);
       article.likes = Number(article.likes);
-      article.categories = articleCategories.filter(
-        (category) => category.id === article.id,
-      );
+      article.categories = categoriesList.find(
+        (category) => category.id === article.article_id,
+      ).categories;
     });
 
-    console.log(articles);
+    // console.log(articles);
     const total = await this.getArticleCount();
     return { data: { total, list: articles } };
   }
@@ -91,22 +103,48 @@ export class ArticleService {
   async getArticleDetail(id: number) {
     const article = await this.articleRepository
       .createQueryBuilder('article')
-      .leftJoinAndSelect('article.author', 'author')
+      .leftJoin('article.author', 'author')
+      .leftJoin('article.categories', 'categories')
       .leftJoin('article.articleComments', 'comments')
       .leftJoin('article.articleLikes', 'likes')
-      .select(['article.*', 'author.nickname AS author'])
-      .addSelect([
-        'COUNT(DISTINCT comments.id) AS comments',
-        'COUNT(DISTINCT likes.id) AS likes',
+      .select([
+        'article',
+        'author.id',
+        'author.username',
+        'author.nickname',
+        'categories.id',
+        'categories.code',
+        'categories.label',
+        'categories.color',
+        'categories.icon',
+        'categories.iconColor',
       ])
       .where({ id }) // 根据文章的 ID 进行过滤
+      .andWhere({ isActivated: 1 })
+      .getOne();
+
+    const count = await this.articleRepository
+      .createQueryBuilder('article')
+      .leftJoin('article.articleComments', 'comments')
+      .leftJoin('article.articleLikes', 'likes')
+      .select([
+        'COUNT(DISTINCT comments.id) AS commentCount',
+        'COUNT(DISTINCT likes.id) AS likeCount',
+      ])
+      .where({ id }) // 根据文章的 ID 进行过滤
+      .andWhere({ isActivated: 1 })
+      .groupBy('article.id')
       .getRawOne();
 
-    article.comments = Number(article.comments);
-    article.likes = Number(article.likes);
-    console.log(article);
-    if (article) {
-      return { data: article };
+    console.log(count);
+    const data = Object.assign(article, {
+      commentCount: Number(count.commentCount),
+      likeCount: Number(count.likeCount),
+    });
+
+    console.log(data);
+    if (data) {
+      return { data: data };
     } else {
       return { result_code: 'article_id_not_found', message: '没找到文章' };
     }
@@ -132,8 +170,9 @@ export class ArticleService {
 
   /** 根据文章id删除文章(更改字段) */
   async deleteArticle(id: number) {
+    console.log(id);
     const article = await this.articleRepository.findOne({
-      where: { id, isActivated: 1 },
+      where: { id },
     });
     if (!article) {
       return { result_code: 'article_id_not_found', message: '文章不存在' };

@@ -5,6 +5,9 @@ export class SearchArticleDto {
   @IsString()
   search: string;
 
+  @IsArray()
+  tagIdList: string[];
+
   @Column({ default: 1 })
   @IsNumber()
   @IsNotEmpty()
