@@ -21,9 +21,8 @@ async function bootstrap() {
     }),
   );
 
+  // 启用 CORS，允许来自指定源的请求
   const origins = JSON.parse(process.env.LSC_CORS_ORIGIN);
-
-  // 启用 CORS，允许来自任何源的请求
   app.use(cors({ origin: origins, credentials: true }));
 
   // DocumentBuilder是一个辅助类，有助于结构的基本文件SwaggerModule。它包含几种方法，可用于设置诸如标题，描述，版本等属性。

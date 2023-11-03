@@ -3,10 +3,11 @@ import { CreateArticleDto } from './dto/create-article.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Article } from './entities/article.entity';
-import { Repository } from 'typeorm';
+import { In, Repository, Timestamp } from 'typeorm';
 import { User } from '../user/entities/user.entity';
 import { SearchArticleDto } from './dto/search-article.dto';
 import { USER_ROLE_MAP } from 'src/constants/common';
+import { Category } from '../category/entities/category.entity';
 
 @Injectable()
 export class ArticleService {
@@ -14,12 +15,26 @@ export class ArticleService {
   constructor(
     @InjectRepository(Article)
     private readonly articleRepository: Repository<Article>,
+    // 要想在别的模块中使用别的repository<实体>必须要在当前模块的imports的TypeOrmModule.forFeature([])中加入这个实体
+    @InjectRepository(Category)
+    private readonly categoryRepository: Repository<Category>,
   ) {}
 
-  async create(createArticleDto: CreateArticleDto, user: User) {
-    const newArticle = await this.articleRepository.create(createArticleDto);
+  /** 创建文章 */
+  async createArticle(
+    createArticleDto: CreateArticleDto,
+    user: User,
+    categoriesIds: number[],
+  ) {
+    const newArticle = this.articleRepository.create(createArticleDto);
     newArticle.author = user;
-    return await this.articleRepository.save(newArticle);
+    // 获取与文章关联的分类实例
+    const categories = await this.categoryRepository.findBy({
+      id: In(categoriesIds),
+    });
+    newArticle.categories = categories;
+    const articleId = (await this.articleRepository.save(newArticle)).id;
+    return { data: { articleId } };
   }
 
   /** 查找有效的文章个数 */
@@ -31,9 +46,12 @@ export class ArticleService {
 
   /** 查询所有没删除的文章 */
   async getArticleList(searchArticleDto: SearchArticleDto) {
-    const { pageNo, tagIdList, pageSize, search } = searchArticleDto;
+    const { pageNo, tagIdListStr, pageSize, search } = searchArticleDto;
+    const tagIdList = tagIdListStr
+      ? tagIdListStr.split(',').map((tagId) => +tagId)
+      : [];
     const skip = (pageNo - 1) * pageSize;
-
+    console.log(skip, pageNo, pageSize);
     let query = this.articleRepository
       .createQueryBuilder('article')
       .leftJoinAndSelect('article.author', 'author')
@@ -52,24 +70,31 @@ export class ArticleService {
         'author.id AS auth_id',
         'CAST(COUNT(DISTINCT comments.id) AS SIGNED) AS comments', // 使用 CAST 转换为数字类型 但是没起作用啊 晕
         'CAST(COUNT(DISTINCT likes.id) AS SIGNED) AS likes', // 使用 CAST 转换为数字类型
+        'GROUP_CONCAT(categories.id) AS categoriesIds',
       ])
       .where('article.title LIKE :keyword', { keyword: `%${search}%` })
       .orWhere('article.subtitle LIKE :keyword', { keyword: `%${search}%` })
       .orWhere('article.desc LIKE :keyword', { keyword: `%${search}%` })
-      .where({ isActivated: 1 }); // 只查没被删除的文章  这个一定是写在前面模糊匹配之后的
+      .where({ isActivated: 1 }) // 只查没被删除的文章  这个一定是写在前面模糊匹配之后的
+      .groupBy('article.id'); // 添加 GROUP BY 子句以满足聚合要求
 
-    // 如果有文章标签限制加一个where
-    if (tagIdList?.length) {
-      query = query.andWhere('categories.id IN (:...ids)', { ids: tagIdList });
+    if (tagIdList.length) {
+      // 如果有标签id 则添加标签查询条件
+      query = query
+        .where('categories.id IN (:...tagIdList)', { tagIdList })
+        .having('COUNT(DISTINCT  categories.id) >= :categoryCount', {
+          categoryCount: tagIdList.length,
+        });
     }
 
-    const articles = await query
-      .groupBy('article.id') // 添加 GROUP BY 子句以满足聚合要求
+    query
       .orderBy('article.id', 'DESC') // 按文章的id降序(新的在上面)
       .offset(skip)
-      .limit(pageSize)
-      .getRawMany();
+      .limit(pageSize);
 
+    const articles = await query.getRawMany();
+
+    const count = 0;
     if (!articles?.length) {
       return { data: { list: [], total: 0 } };
     }
@@ -82,8 +107,6 @@ export class ArticleService {
       .where('article.id IN (:...ids)', { ids: articleIds })
       .getMany();
 
-    console.log(categoriesList);
-
     // 将类别信息关联到文章对象中
     articles.forEach((article) => {
       // 在这里做一下转换吧 把字符串转数字
@@ -94,9 +117,13 @@ export class ArticleService {
       ).categories;
     });
 
-    // console.log(articles);
-    const total = await this.getArticleCount();
-    return { data: { total, list: articles } };
+    return {
+      data: {
+        has_next: (pageNo - 1) * pageSize + pageSize < count,
+        total: count,
+        list: articles,
+      },
+    };
   }
 
   /** 查询文章详情 */
@@ -136,13 +163,11 @@ export class ArticleService {
       .groupBy('article.id')
       .getRawOne();
 
-    console.log(count);
     const data = Object.assign(article, {
       commentCount: Number(count.commentCount),
       likeCount: Number(count.likeCount),
     });
 
-    console.log(data);
     if (data) {
       return { data: data };
     } else {
@@ -151,21 +176,49 @@ export class ArticleService {
   }
 
   // 更新文章
-  async update(id: number, updateArticleDto: UpdateArticleDto, userId: string) {
-    const article = await this.articleRepository.findOne({
-      where: { id },
-    });
+  async updateArticle(
+    id: number,
+    updateArticleDto: UpdateArticleDto,
+    user: User,
+  ) {
+    const article = await this.articleRepository
+      .createQueryBuilder('article')
+      .leftJoinAndSelect('article.author', 'author')
+      .where('article.id = :id', { id })
+      .getOne();
+    if (!article) {
+      return { result_code: 'article_id_not_found', message: '没找到文章' };
+    }
     // 如果当前用户的角色是AUTHOR，但是文章的作者不是该用户不能更新
     if (
       article.author.role !== USER_ROLE_MAP.ROOT &&
-      userId !== article.author.id
+      user.id !== article.author.id
     ) {
       return {
         result_code: 'has_no_permission',
         message: '只有作者本人能进行修改',
       };
     }
-    return `This action updates a #${id} article`;
+    if (updateArticleDto.banner) {
+      article.banner = updateArticleDto.banner;
+    }
+    const categoriesIds = JSON.parse(updateArticleDto.tags).map(
+      (tag: any) => tag.id,
+    );
+    // 获取与文章关联的分类实例
+    const categories = await this.categoryRepository.findBy({
+      id: In(categoriesIds),
+    });
+    article.categories = categories;
+    article.title = updateArticleDto.title;
+    article.subtitle = updateArticleDto.subtitle;
+    article.desc = updateArticleDto.desc;
+    article.content = updateArticleDto.content;
+    // @ts-ignore
+    article.updateTime = new Date();
+    // 保存更新后的文章
+    const updatedArticle = await this.articleRepository.save(article);
+    return { data: { articleId: updatedArticle.id } };
   }
 
   /** 根据文章id删除文章(更改字段) */

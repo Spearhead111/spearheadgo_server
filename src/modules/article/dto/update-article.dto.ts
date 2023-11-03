@@ -1,8 +1,5 @@
 import { PartialType } from '@nestjs/mapped-types';
-import { CreateArticleDto } from './create-article.dto';
+import { CreateArticleDto, CreateArticleOriginDto } from './create-article.dto';
+import { IsNotEmpty, IsString } from 'class-validator';
 
-export class UpdateArticleDto extends PartialType(CreateArticleDto) {
-  // TODO
-  title: string;
-  subtitle: string;
-}
+export class UpdateArticleDto extends PartialType(CreateArticleOriginDto) {}

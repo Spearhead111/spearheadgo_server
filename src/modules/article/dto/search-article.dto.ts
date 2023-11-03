@@ -6,7 +6,7 @@ export class SearchArticleDto {
   search: string;
 
   @IsArray()
-  tagIdList: string[];
+  tagIdListStr: string;
 
   @Column({ default: 1 })
   @IsNumber()
