@@ -9,6 +9,7 @@ import {
   UseGuards,
   Req,
   SetMetadata,
+  Query,
 } from '@nestjs/common';
 import { UserService } from './user.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -17,6 +18,7 @@ import { LoginUserDto } from './dto/login-user.dto';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from 'src/guard/roles/roles.guard';
+import { GetUserListDto } from './dto/get-user-list.dto';
 
 @ApiTags('用户')
 @Controller('user')
@@ -31,9 +33,10 @@ export class UserController {
   // 获取所有用户列表
   @Get('get-user-list')
   @UseGuards(AuthGuard('jwt'))
-  @SetMetadata('roles', ['root']) // 需要root权限
-  findAll() {
-    return this.userService.findAll();
+  @SetMetadata('roles', ['admin']) // 需要 admin 权限
+  getAllUsers(@Query() query: GetUserListDto) {
+    console.log(query);
+    return this.userService.getAllUsers(query);
   }
 
   @Get(':id/get-user')

@@ -31,6 +31,7 @@ import { FileService } from 'src/services/upload.service';
 import { User } from '../user/entities/user.entity';
 import { buffer } from 'stream/consumers';
 import { ConfigService } from '@nestjs/config';
+import { GetAdminArticleDto } from './dto/get-admin-article.dto';
 
 @ApiTags('文章')
 @Controller('article')
@@ -131,10 +132,27 @@ export class ArticleController {
 
   /** 删除文章 */
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @SetMetadata('roles', [USER_ROLE_MAP.ROOT]) // 需要写作权限
+  @SetMetadata('roles', [USER_ROLE_MAP.ADMIN])
   @Get(':article_id/delete-article')
-  deleteArticle(@Param('article_id') id: string) {
-    console.log(id);
-    return this.articleService.deleteArticle(+id);
+  deleteArticle(@Param('article_id') id: string, @Req() { user }) {
+    return this.articleService.deleteArticle(+id, user);
+  }
+
+  /** 恢复文章上线状态 */
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @SetMetadata('roles', [USER_ROLE_MAP.ADMIN])
+  @Get(':article_id/recover-article')
+  recoverArticle(@Param('article_id') id: string, @Req() { user }) {
+    return this.articleService.recoverArticle(+id, user);
+  }
+
+  /** 获取文章列表管理版 */
+  @Get('admin-article-list')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @SetMetadata('roles', [USER_ROLE_MAP.ADMIN])
+  async getAdminArticleList(
+    @Query() body: GetAdminArticleDto, // 获取其他参数
+  ) {
+    return this.articleService.getAdminArticleList(body);
   }
 }

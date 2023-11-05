@@ -47,9 +47,12 @@ export class Article {
   @OneToMany(() => ArticleLikes, (articleLikes) => articleLikes.article)
   articleLikes: ArticleLikes[];
 
-  @ManyToOne(() => User, (user) => user.articles)
+  @ManyToOne(() => User, (user) => user.articles, { eager: true })
   @JoinColumn({ name: 'author_id', referencedColumnName: 'id' })
   author: User;
+
+  @ManyToOne(() => User, { eager: true })
+  updateBy: User;
 
   @ManyToMany(() => Category, (category) => category.articles)
   @JoinTable({

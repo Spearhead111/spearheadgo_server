@@ -5,6 +5,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './entities/user.entity';
 import { Base64 } from 'js-base64';
+import { GetUserListDto } from './dto/get-user-list.dto';
 
 @Injectable()
 export class UserService {
@@ -14,6 +15,7 @@ export class UserService {
     private readonly userRepository: Repository<User>,
   ) {}
 
+  /** 注册用户 */
   async register(createUserDto: CreateUserDto) {
     const { username } = createUserDto;
 
@@ -35,11 +37,59 @@ export class UserService {
     return await this.userRepository.save(newUser);
   }
 
-  async findAll() {
-    const list = await this.userRepository.query('select * from user');
-    const total = await this.userRepository.query(
-      `select * from user where isActivated = 1`,
-    );
+  /** 查找所有用户列表 */
+  async getAllUsers(getUserListDto: GetUserListDto) {
+    let { pageNo, pageSize, search, role, isActivated } = getUserListDto;
+    isActivated = Number(isActivated);
+    pageNo = Number(pageNo);
+    pageSize = Number(pageSize);
+    const roleList = role.split(',');
+    const skip = (pageNo - 1) * pageSize;
+    let query = this.userRepository
+      .createQueryBuilder('user')
+      .leftJoin('user.articles', 'articles')
+      .select([
+        'user.id AS id',
+        'user.username AS username',
+        'user.nickname AS nickname',
+        'user.email AS email',
+        'user.createTime AS createTime',
+        'user.updateTime AS updateTime',
+        'user.role AS role',
+        'user.isActivated AS isActivated',
+        'COUNT(DISTINCT articles.id) AS articlesCount',
+      ])
+      .where('user.username LIKE :keyword', {
+        keyword: `%${search}%`,
+      })
+      .orWhere('user.nickname LIKE :keyword', {
+        keyword: `%${search}%`,
+      })
+      .groupBy('user.id');
+
+    // 如果有角色查询条件
+    if (role) {
+      query = query.andWhere('user.role IN (:...roleList)', {
+        roleList: roleList,
+      });
+    }
+    // 如果有用户状态查询条件
+    if (isActivated !== -1) {
+      // 字段值不为-1说明有查询条件，-1是查询全部
+      query = query.where('user.isActivated = :isActivated', {
+        isActivated: isActivated,
+      });
+    }
+    // 分页
+    query = query.offset(skip).limit(pageSize);
+    const total = await query.getCount();
+    const list = await query.getRawMany();
+    list.forEach((user) => {
+      user.articlesCount = Number(user.articlesCount);
+      user.createTime = new Date(user.createTime).getTime();
+      user.updateTime = new Date(user.updateTime).getTime();
+    });
+
     return { data: { list, total } };
   }
 

@@ -34,7 +34,7 @@ export class User {
   avatar: string;
 
   @Column('simple-enum', {
-    enum: ['root', 'author', 'visitor'],
+    enum: ['root', 'admin', 'author', 'visitor'],
     default: 'visitor',
   })
   role: string; // 用户角色

@@ -8,6 +8,7 @@ import { User } from '../user/entities/user.entity';
 import { SearchArticleDto } from './dto/search-article.dto';
 import { USER_ROLE_MAP } from 'src/constants/common';
 import { Category } from '../category/entities/category.entity';
+import { GetAdminArticleDto } from './dto/get-admin-article.dto';
 
 @Injectable()
 export class ArticleService {
@@ -28,6 +29,7 @@ export class ArticleService {
   ) {
     const newArticle = this.articleRepository.create(createArticleDto);
     newArticle.author = user;
+    newArticle.updateBy = user;
     // 获取与文章关联的分类实例
     const categories = await this.categoryRepository.findBy({
       id: In(categoriesIds),
@@ -51,7 +53,6 @@ export class ArticleService {
       ? tagIdListStr.split(',').map((tagId) => +tagId)
       : [];
     const skip = (pageNo - 1) * pageSize;
-    console.log(skip, pageNo, pageSize);
     let query = this.articleRepository
       .createQueryBuilder('article')
       .leftJoinAndSelect('article.author', 'author')
@@ -72,29 +73,33 @@ export class ArticleService {
         'CAST(COUNT(DISTINCT likes.id) AS SIGNED) AS likes', // 使用 CAST 转换为数字类型
         'GROUP_CONCAT(categories.id) AS categoriesIds',
       ])
-      .where('article.title LIKE :keyword', { keyword: `%${search}%` })
-      .orWhere('article.subtitle LIKE :keyword', { keyword: `%${search}%` })
-      .orWhere('article.desc LIKE :keyword', { keyword: `%${search}%` })
-      .where({ isActivated: 1 }) // 只查没被删除的文章  这个一定是写在前面模糊匹配之后的
-      .groupBy('article.id'); // 添加 GROUP BY 子句以满足聚合要求
+      .where('article.isActivated = :isActivated', { isActivated: 1 }) // 只查没被删除的文章  这个一定是写在前面模糊匹配之后的
+      .andWhere(
+        '(article.title LIKE :keyword OR article.subtitle LIKE :keyword OR article.description LIKE :keyword)',
+        { keyword: `%${search}%` },
+      ); // or条件一定要写在一起并且放在一个where里
 
     if (tagIdList.length) {
+      console.log(tagIdList);
       // 如果有标签id 则添加标签查询条件
       query = query
-        .where('categories.id IN (:...tagIdList)', { tagIdList })
+        .andWhere('categories.id IN (:...tagIdList)', { tagIdList })
         .having('COUNT(DISTINCT  categories.id) >= :categoryCount', {
           categoryCount: tagIdList.length,
         });
     }
 
     query
-      .orderBy('article.id', 'DESC') // 按文章的id降序(新的在上面)
+      .groupBy('article.id') // 添加 GROUP BY 子句以满足聚合要求
+      .orderBy('likes', 'DESC') // 先按点赞数降序
+      .addOrderBy('article.createTime', 'DESC') // 再按创建时间降序排序
       .offset(skip)
       .limit(pageSize);
 
     const articles = await query.getRawMany();
+    console.log(query.getSql());
 
-    const count = 0;
+    const count = await query.getCount();
     if (!articles?.length) {
       return { data: { list: [], total: 0 } };
     }
@@ -150,6 +155,9 @@ export class ArticleService {
       .andWhere({ isActivated: 1 })
       .getOne();
 
+    if (!article) {
+      return { result_code: 'article_id_not_found', message: '文章不存在' };
+    }
     const count = await this.articleRepository
       .createQueryBuilder('article')
       .leftJoin('article.articleComments', 'comments')
@@ -209,6 +217,7 @@ export class ArticleService {
     const categories = await this.categoryRepository.findBy({
       id: In(categoriesIds),
     });
+    article.updateBy = user;
     article.categories = categories;
     article.title = updateArticleDto.title;
     article.subtitle = updateArticleDto.subtitle;
@@ -222,8 +231,7 @@ export class ArticleService {
   }
 
   /** 根据文章id删除文章(更改字段) */
-  async deleteArticle(id: number) {
-    console.log(id);
+  async deleteArticle(id: number, user: User) {
     const article = await this.articleRepository.findOne({
       where: { id },
     });
@@ -231,6 +239,101 @@ export class ArticleService {
       return { result_code: 'article_id_not_found', message: '文章不存在' };
     }
     article.isActivated = 0;
+    article.updateBy = user;
     return await this.articleRepository.save(article);
+  }
+
+  /** 根据文章id上线文章(更改字段) */
+  async recoverArticle(id: number, user: User) {
+    const article = await this.articleRepository.findOne({
+      where: { id },
+    });
+    if (!article) {
+      return { result_code: 'article_id_not_found', message: '文章不存在' };
+    }
+    article.isActivated = 1;
+    article.updateBy = user;
+    return await this.articleRepository.save(article);
+  }
+
+  /** 获取文章列表管理版 */
+  async getAdminArticleList(getAdminArticleDto: GetAdminArticleDto) {
+    console.log(getAdminArticleDto);
+    const { pageNo, tagList, pageSize, search, author } = getAdminArticleDto;
+    const tagCodeList = tagList ? tagList.split(',') : [];
+    const authorIdList = author ? author.split(',') : [];
+    const skip = (pageNo - 1) * pageSize;
+    let query = this.articleRepository
+      .createQueryBuilder('article')
+      .leftJoin('article.author', 'author')
+      .leftJoin('article.updateBy', 'updateBy')
+      .leftJoin('article.articleLikes', 'likes')
+      .leftJoin('article.categories', 'categories')
+      .select([
+        'article.id AS id',
+        'article.title AS title',
+        'CAST(COUNT(DISTINCT likes.id) AS SIGNED) AS likes', // 使用 CAST 转换为数字类型
+        'author.nickname AS author',
+        'updateBy.nickname AS updateBy',
+        'article.createTime AS createTime',
+        'article.updateTime AS updateTime',
+        'article.isActivated AS isActivated',
+      ])
+      .where('article.title LIKE :keyword', {
+        keyword: `%${search}%`,
+      })
+      .groupBy('article.id');
+    // 如果有文章标签的搜索条件
+    if (tagCodeList.length > 0) {
+      query = query.andWhere('categories.code IN (:...codes)', {
+        codes: tagCodeList,
+      });
+    }
+    if (authorIdList.length > 0) {
+      console.log(authorIdList, '============================');
+      query = query.andWhere('author.id IN (:...authorIds)', {
+        authorIds: authorIdList,
+      });
+    }
+    // 分页
+    query = query.offset(skip).limit(pageSize);
+    const total = await query.getCount();
+    // 没有查到直接返回空的，避免浪费查询资源
+    if (!total) {
+      return {
+        data: {
+          has_next: false,
+          list: [],
+          total,
+        },
+      };
+    }
+    const list = await query.getRawMany();
+
+    // 查询文章的类别信息
+    const articleIds = list.map((article) => article.id);
+    const categoriesList = await this.articleRepository
+      .createQueryBuilder('article')
+      .leftJoin('article.categories', 'categories')
+      .select(['article.id', 'categories'])
+      .where('article.id IN (:...ids)', { ids: articleIds })
+      .getMany();
+    list.forEach((article) => {
+      article.likes = Number(article.likes);
+      article.createTime = article.createTime.getTime();
+      article.updateTime = article.updateTime.getTime();
+      // 将查询出来的现成标签信息给文章list
+      article.tags = categoriesList.find(
+        (category) => category.id === article.id,
+      ).categories;
+    });
+
+    return {
+      data: {
+        has_next: (pageNo - 1) * pageSize + pageSize < total,
+        list,
+        total,
+      },
+    };
   }
 }
