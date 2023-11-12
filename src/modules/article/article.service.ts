@@ -9,6 +9,12 @@ import { SearchArticleDto } from './dto/search-article.dto';
 import { USER_ROLE_MAP } from 'src/constants/common';
 import { Category } from '../category/entities/category.entity';
 import { GetAdminArticleDto } from './dto/get-admin-article.dto';
+import { GetLatestArticleDto } from './dto/get-latest-article.dto';
+import { SendArticleCommentDto } from './dto/send-article-comment.dto';
+import { SendArticleCommentReplyDto } from './dto/send-article-comment-reply.dto';
+import { ArticleComments } from './entities/articleComments.entity';
+import { GetArticleCommentDto } from './dto/get-article-comment.dto';
+import { CommentReply } from './entities/comment-reply.entity';
 
 @Injectable()
 export class ArticleService {
@@ -19,6 +25,10 @@ export class ArticleService {
     // 要想在别的模块中使用别的repository<实体>必须要在当前模块的imports的TypeOrmModule.forFeature([])中加入这个实体
     @InjectRepository(Category)
     private readonly categoryRepository: Repository<Category>,
+    @InjectRepository(ArticleComments)
+    private readonly articleCommentsRepository: Repository<ArticleComments>,
+    @InjectRepository(CommentReply)
+    private readonly commentReplyRepository: Repository<CommentReply>,
   ) {}
 
   /** 创建文章 */
@@ -57,6 +67,7 @@ export class ArticleService {
       .createQueryBuilder('article')
       .leftJoinAndSelect('article.author', 'author')
       .leftJoinAndSelect('article.articleComments', 'comments')
+      .leftJoinAndSelect('comments.commentReply', 'commentReply')
       .leftJoinAndSelect('article.articleLikes', 'likes')
       .leftJoinAndSelect('article.categories', 'categories')
       .select([
@@ -69,7 +80,7 @@ export class ArticleService {
         'article.updateTime',
         'author.nickname',
         'author.id AS auth_id',
-        'CAST(COUNT(DISTINCT comments.id) AS SIGNED) AS comments', // 使用 CAST 转换为数字类型 但是没起作用啊 晕
+        // 'CAST(COUNT(DISTINCT comments.id) AS SIGNED) AS comments', // 使用 CAST 转换为数字类型 但是没起作用啊 晕
         'CAST(COUNT(DISTINCT likes.id) AS SIGNED) AS likes', // 使用 CAST 转换为数字类型
         'GROUP_CONCAT(categories.id) AS categoriesIds',
       ])
@@ -77,10 +88,9 @@ export class ArticleService {
       .andWhere(
         '(article.title LIKE :keyword OR article.subtitle LIKE :keyword OR article.description LIKE :keyword)',
         { keyword: `%${search}%` },
-      ); // or条件一定要写在一起并且放在一个where里
+      ); // or条件一定要写在一起并且放在一个where里，这不是重点，重点是一定要把or给括号括起来
 
     if (tagIdList.length) {
-      console.log(tagIdList);
       // 如果有标签id 则添加标签查询条件
       query = query
         .andWhere('categories.id IN (:...tagIdList)', { tagIdList })
@@ -97,11 +107,10 @@ export class ArticleService {
       .limit(pageSize);
 
     const articles = await query.getRawMany();
-    console.log(query.getSql());
 
     const count = await query.getCount();
     if (!articles?.length) {
-      return { data: { list: [], total: 0 } };
+      return { data: { list: [], total: 0, has_next: false } };
     }
     // 查询文章的类别信息
     const articleIds = articles.map((article) => article.article_id);
@@ -112,19 +121,30 @@ export class ArticleService {
       .where('article.id IN (:...ids)', { ids: articleIds })
       .getMany();
 
+    const articleComments = await this.articleRepository
+      .createQueryBuilder('article')
+      .leftJoinAndSelect('article.articleComments', 'comments')
+      .leftJoinAndSelect('comments.commentReply', 'commentReply')
+      .where('article.id IN (:...ids)', { ids: articleIds })
+      .getMany();
+
     // 将类别信息关联到文章对象中
     articles.forEach((article) => {
-      // 在这里做一下转换吧 把字符串转数字
-      article.comments = Number(article.comments);
+      let comments = 0;
+      articleComments
+        .find((article_) => article_.id === article.article_id)
+        .articleComments.forEach((comment) => {
+          comments += comment.commentReply.length + 1;
+        });
+      article.comments = comments;
       article.likes = Number(article.likes);
       article.categories = categoriesList.find(
         (category) => category.id === article.article_id,
       ).categories;
     });
-
     return {
       data: {
-        has_next: (pageNo - 1) * pageSize + pageSize < count,
+        has_next: (pageNo - 1) * pageSize + +pageSize < count,
         total: count,
         list: articles,
       },
@@ -162,17 +182,25 @@ export class ArticleService {
       .createQueryBuilder('article')
       .leftJoin('article.articleComments', 'comments')
       .leftJoin('article.articleLikes', 'likes')
-      .select([
-        'COUNT(DISTINCT comments.id) AS commentCount',
-        'COUNT(DISTINCT likes.id) AS likeCount',
-      ])
+      .select(['COUNT(DISTINCT likes.id) AS likeCount'])
       .where({ id }) // 根据文章的 ID 进行过滤
       .andWhere({ isActivated: 1 })
       .groupBy('article.id')
       .getRawOne();
 
+    const articleComments = await this.articleCommentsRepository
+      .createQueryBuilder('articleComments')
+      .leftJoinAndSelect('articleComments.article', 'article')
+      .leftJoinAndSelect('articleComments.commentReply', 'commentReply')
+      .where('article.id = :id', { id })
+      .getMany();
+    let commentCount = 0;
+    articleComments.forEach((comment) => {
+      commentCount += comment.commentReply.length + 1;
+    });
+
     const data = Object.assign(article, {
-      commentCount: Number(count.commentCount),
+      commentCount: commentCount,
       likeCount: Number(count.likeCount),
     });
 
@@ -258,7 +286,6 @@ export class ArticleService {
 
   /** 获取文章列表管理版 */
   async getAdminArticleList(getAdminArticleDto: GetAdminArticleDto) {
-    console.log(getAdminArticleDto);
     const { pageNo, tagList, pageSize, search, author } = getAdminArticleDto;
     const tagCodeList = tagList ? tagList.split(',') : [];
     const authorIdList = author ? author.split(',') : [];
@@ -290,7 +317,6 @@ export class ArticleService {
       });
     }
     if (authorIdList.length > 0) {
-      console.log(authorIdList, '============================');
       query = query.andWhere('author.id IN (:...authorIds)', {
         authorIds: authorIdList,
       });
@@ -335,5 +361,168 @@ export class ArticleService {
         total,
       },
     };
+  }
+
+  /** 获取最新发布的文章 */
+  async getLatestArticle(getLatestArticleDto: GetLatestArticleDto) {
+    const { pageNo, pageSize } = getLatestArticleDto;
+    const skip = (pageNo - 1) * pageSize;
+    const articles = await this.articleRepository
+      .createQueryBuilder('article')
+      .leftJoin('article.author', 'author')
+      .select([
+        'article.id AS articleId',
+        'article.title AS title',
+        'article.createTime AS createTime',
+        'author.nickname AS author',
+        'author.role AS authorRole',
+        'author.avatar AS authorAvatar',
+      ])
+      .where('article.isActivated = :isActivated', { isActivated: 1 })
+      .orderBy('article.createTime', 'DESC')
+      .offset(skip)
+      .limit(pageSize)
+      .getRawMany();
+
+    const categories = await this.articleRepository
+      .createQueryBuilder('article')
+      .leftJoinAndSelect('article.categories', 'categories')
+      .select(['article.id', 'article.createTime', 'categories'])
+      .where('article.isActivated = :isActivated', { isActivated: 1 })
+      .orderBy('article.createTime', 'DESC')
+      .offset(skip)
+      .limit(pageSize)
+      .getMany();
+
+    console.log(categories);
+    articles.forEach((article: any, index: number) => {
+      article.createTime = article.createTime.getTime();
+      article.tags = categories[index]?.categories || [];
+    });
+    return { data: articles };
+  }
+
+  /** 获取文章评论 */
+  async getArticleComment(id: number, query: GetArticleCommentDto) {
+    const article = await this.articleRepository.findOne({
+      where: { id, isActivated: 1 },
+    });
+    if (!article) {
+      return { result_code: 'article_id_not_found', message: '文章不存在' };
+    }
+    const { pageNo, pageSize } = query;
+    const skip = (pageNo - 1) * pageSize;
+    const comments = await this.articleCommentsRepository
+      .createQueryBuilder('articleComment')
+      .leftJoinAndSelect('articleComment.commentBy', 'commentBy')
+      .leftJoinAndSelect('articleComment.commentReply', 'commentReply')
+      .leftJoinAndSelect('articleComment.commentLikes', 'commentLikes')
+      .leftJoinAndSelect('commentReply.commentBy', 'commentReplyCommentBy')
+      .leftJoinAndSelect('commentReply.commentLikes', 'commentReplyLikes')
+      .leftJoinAndSelect('commentReply.replyToUser', 'replyToUser')
+      .where('articleComment.article = :article', { article: id })
+      .orderBy('articleComment.createTime', 'DESC')
+      .offset(skip)
+      .limit(pageSize)
+      .getMany();
+    let count = 0;
+    const commentsRes = comments.map((comment) => {
+      let newComment: any = {};
+      newComment.id = comment.id;
+      // @ts-ignore
+      newComment.createTime = comment.createTime.getTime();
+      newComment.content = comment.content;
+      newComment.commentBy = comment.commentBy.nickname;
+      newComment.commentById = comment.commentBy.id;
+      newComment.commentByAvatar = comment.commentBy.avatar;
+      newComment.commentLikes = comment.commentLikes.length;
+      newComment.replyComment = comment.commentReply.map((commentReply) => {
+        return {
+          ...commentReply,
+          // @ts-ignore
+          createTime: commentReply.createTime.getTime(),
+          commentBy: commentReply.commentBy.nickname,
+          commentByAvatar: commentReply.commentBy.avatar,
+          commentById: commentReply.commentBy.id,
+          commentLikes: commentReply.commentLikes.length,
+          replyTo: commentReply.replyToUser.nickname,
+        };
+      });
+      count += comment.commentReply.length + 1;
+      return newComment;
+    });
+    return {
+      data: {
+        has_next: (pageNo - 1) * pageSize + pageSize < count,
+        list: commentsRes,
+        total: count,
+      },
+    };
+  }
+
+  /** 发表文章评论 */
+  async sendArticleComment(
+    sendArticleCommentDto: SendArticleCommentDto,
+    user: User,
+  ) {
+    const article = await this.articleRepository.findOne({
+      where: { id: +sendArticleCommentDto.articleId },
+    });
+    if (!article) {
+      return { result_code: 'article_id_not_found', message: '文章不存在' };
+    }
+    const articleComment = this.articleCommentsRepository.create(
+      sendArticleCommentDto,
+    );
+    articleComment.article = article;
+    articleComment.commentBy = user;
+    return await this.articleCommentsRepository.save(articleComment);
+  }
+
+  /** 发表文章评论的回复 */
+  async sendArticleCommentReply(
+    articleId: number,
+    sendArticleCommentReplyDto: SendArticleCommentReplyDto,
+    user: User,
+  ) {
+    const article = await this.articleRepository.findOne({
+      where: { id: +articleId },
+    });
+    if (!article) {
+      return { result_code: 'article_id_not_found', message: '文章不存在' };
+    }
+    // 查看属于的评论存不存在
+    const articleComment = await this.articleCommentsRepository.findOne({
+      where: { id: +sendArticleCommentReplyDto.belongCommentId },
+    });
+    if (!articleComment) {
+      return { result_code: 'comment_id_not_found', message: '该评论不存在' };
+    }
+    // 查看回复的评论存不存在
+    // 判断下回复的是一级评论还是二级评论
+    const commentsRepository = sendArticleCommentReplyDto.isReplyToTop
+      ? this.articleCommentsRepository
+      : this.commentReplyRepository;
+    const replyToComment = await commentsRepository
+      .createQueryBuilder('replyToComment')
+      .leftJoinAndSelect('replyToComment.commentBy', 'commentBy')
+      .where('replyToComment.id = :id', {
+        id: +sendArticleCommentReplyDto.replyToCommentId,
+      })
+      .getOne();
+    if (!replyToComment) {
+      return { result_code: 'comment_id_not_found', message: '该评论不存在' };
+    }
+
+    const articleReplyComment = this.commentReplyRepository.create(
+      sendArticleCommentReplyDto,
+    );
+
+    articleReplyComment.commentBy = user;
+    articleReplyComment.article = article;
+    articleReplyComment.belongComment = articleComment;
+    articleReplyComment.replyToUser = replyToComment.commentBy;
+    articleReplyComment.isReplyToTop = sendArticleCommentReplyDto.isReplyToTop;
+    return await this.commentReplyRepository.save(articleReplyComment);
   }
 }

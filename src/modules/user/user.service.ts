@@ -6,6 +6,8 @@ import { Repository } from 'typeorm';
 import { User } from './entities/user.entity';
 import { Base64 } from 'js-base64';
 import { GetUserListDto } from './dto/get-user-list.dto';
+import { ChangeUserStatusDto } from './dto/change-user-status.dto';
+import { USER_ROLE_MAP } from 'src/constants/common';
 
 @Injectable()
 export class UserService {
@@ -28,19 +30,19 @@ export class UserService {
     );
     if (existUser) {
       return {
-        result_code: 'user_already_exist',
-        message: 'user already exist',
+        result_code: 'user_name_already_exist',
+        message: 'user name already exist',
       };
     }
 
-    const newUser = await this.userRepository.create(createUserDto);
+    const newUser = this.userRepository.create(createUserDto);
     return await this.userRepository.save(newUser);
   }
 
   /** 查找所有用户列表 */
   async getAllUsers(getUserListDto: GetUserListDto) {
-    let { pageNo, pageSize, search, role, isActivated } = getUserListDto;
-    isActivated = Number(isActivated);
+    let { pageNo, pageSize, search, role, status } = getUserListDto;
+    status = isNaN(Number(status)) ? -1 : Number(status);
     pageNo = Number(pageNo);
     pageSize = Number(pageSize);
     const roleList = role.split(',');
@@ -59,29 +61,34 @@ export class UserService {
         'user.isActivated AS isActivated',
         'COUNT(DISTINCT articles.id) AS articlesCount',
       ])
-      .where('user.username LIKE :keyword', {
-        keyword: `%${search}%`,
-      })
-      .orWhere('user.nickname LIKE :keyword', {
-        keyword: `%${search}%`,
-      })
       .groupBy('user.id');
 
+    if (search) {
+      query = query.where(
+        '(user.username LIKE :keyword OR user.nickname LIKE :keyword)',
+        { keyword: `%${search}%` },
+      );
+    }
+    // 如果有用户状态查询条件
+    if (status !== -1) {
+      // 字段值不为-1说明有查询条件，-1是查询全部
+      query = query.andWhere('user.isActivated = :isActivated', {
+        isActivated: status,
+      });
+    }
     // 如果有角色查询条件
     if (role) {
       query = query.andWhere('user.role IN (:...roleList)', {
         roleList: roleList,
       });
     }
-    // 如果有用户状态查询条件
-    if (isActivated !== -1) {
-      // 字段值不为-1说明有查询条件，-1是查询全部
-      query = query.where('user.isActivated = :isActivated', {
-        isActivated: isActivated,
-      });
-    }
+
     // 分页
-    query = query.offset(skip).limit(pageSize);
+    query = query
+      .orderBy('user.createTime', 'DESC')
+      .offset(skip)
+      .limit(pageSize);
+
     const total = await query.getCount();
     const list = await query.getRawMany();
     list.forEach((user) => {
@@ -90,7 +97,13 @@ export class UserService {
       user.updateTime = new Date(user.updateTime).getTime();
     });
 
-    return { data: { list, total } };
+    return {
+      data: {
+        has_next: (pageNo - 1) * pageSize + pageSize < total,
+        list,
+        total,
+      },
+    };
   }
 
   async findOne(id: string) {
@@ -124,5 +137,32 @@ export class UserService {
     }
 
     return {};
+  }
+
+  /** 更改用户状态(isActivated字段) */
+  async changeUserStatus(query: ChangeUserStatusDto, operateUser: User) {
+    const user = await this.userRepository.findOne({
+      where: {
+        id: query.id,
+      },
+    });
+    if (!user) {
+      return { result_code: 'user_id_not_found', message: '用户id不存在' };
+    } else if (
+      operateUser?.role !== USER_ROLE_MAP.ROOT &&
+      (user.role === USER_ROLE_MAP.ADMIN || user.role === USER_ROLE_MAP.ROOT)
+    ) {
+      // 非ROOT操作者无权更改管理员的信息
+      return { result_code: 'has_no_permission', message: '无权操作' };
+    } else if (user.isActivated === query.isActivated) {
+      return {
+        result_code: 'user_already_current_status',
+        message: '用户当前已经是此状态',
+      };
+    }
+    user.isActivated = query.isActivated;
+    // @ts-ignore
+    user.updateTime = new Date();
+    return await this.userRepository.save(user);
   }
 }

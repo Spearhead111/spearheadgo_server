@@ -10,6 +10,9 @@ import { ArticleLikes } from './entities/articleLike.entity';
 import { FileService } from 'src/services/upload.service';
 import { CategoryModule } from '../category/category.module';
 import { Category } from '../category/entities/category.entity';
+import { ArticleCommentsLikes } from './entities/article-comments-like.entity';
+import { CommentReply } from './entities/comment-reply.entity';
+import { CommentReplyLike } from './entities/comment-reply-like.entity';
 
 @Module({
   imports: [
@@ -18,6 +21,9 @@ import { Category } from '../category/entities/category.entity';
       ArticleComments,
       ArticleLikes,
       Category,
+      ArticleCommentsLikes,
+      CommentReply,
+      CommentReplyLike,
     ]),
     UserModule,
     AuthModule,

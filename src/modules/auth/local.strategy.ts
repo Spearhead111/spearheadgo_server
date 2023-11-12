@@ -29,7 +29,6 @@ export class LocalStrategy extends PassportStrategy(Strategy) {
       throw new BadRequestException('用户名不正确！');
     }
     const decodedPassword = Base64.decode(Base64.decode(password));
-    console.log(password, decodedPassword);
     if (!compareSync(decodedPassword, user.password)) {
       throw new BadRequestException('密码不正确！');
     }

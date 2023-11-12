@@ -32,6 +32,10 @@ import { User } from '../user/entities/user.entity';
 import { buffer } from 'stream/consumers';
 import { ConfigService } from '@nestjs/config';
 import { GetAdminArticleDto } from './dto/get-admin-article.dto';
+import { GetLatestArticleDto } from './dto/get-latest-article.dto';
+import { SendArticleCommentDto } from './dto/send-article-comment.dto';
+import { SendArticleCommentReplyDto } from './dto/send-article-comment-reply.dto';
+import { GetArticleCommentDto } from './dto/get-article-comment.dto';
 
 @ApiTags('文章')
 @Controller('article')
@@ -154,5 +158,42 @@ export class ArticleController {
     @Query() body: GetAdminArticleDto, // 获取其他参数
   ) {
     return this.articleService.getAdminArticleList(body);
+  }
+
+  /** 获取最新发布的文章 */
+  @Get('get-latest-articles')
+  getLatestArticle(@Query() query: GetLatestArticleDto) {
+    return this.articleService.getLatestArticle(query);
+  }
+
+  /** 获取文章评论 */
+  @Get(':article_id/get-article-comment')
+  getArticleComment(
+    @Param('article_id') id: string,
+    @Query() query: GetArticleCommentDto,
+  ) {
+    return this.articleService.getArticleComment(+id, query);
+  }
+
+  /** 发表文章评论 */
+  @Post(':articleId/comment-article')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  sendArticleComment(
+    @Param('article_id') id: string,
+    @Body() body: SendArticleCommentDto,
+    @Req() { user },
+  ) {
+    return this.articleService.sendArticleComment(body, user);
+  }
+
+  /** 发表文章评论的回复 */
+  @Post(':articleId/reply-comment-article')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  sendArticleCommentReply(
+    @Param('articleId') id: number,
+    @Body() body: SendArticleCommentReplyDto,
+    @Req() { user },
+  ) {
+    return this.articleService.sendArticleCommentReply(id, body, user);
   }
 }

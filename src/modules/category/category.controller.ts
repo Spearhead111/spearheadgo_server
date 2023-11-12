@@ -31,7 +31,7 @@ export class CategoryController {
   /** 新建文章标签 */
   @Post('create-category')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @SetMetadata('roles', [USER_ROLE_MAP.AUTHOR]) // 需要写作权限
+  @SetMetadata('roles', [USER_ROLE_MAP.ADMIN]) // 需要管理员权限
   createArticleTag(@Body() body: CreateCategoryDto) {
     return this.categoryService.createArticleTag(body);
   }
@@ -39,8 +39,16 @@ export class CategoryController {
   /** 更新文章标签 */
   @Post('update-category')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @SetMetadata('roles', [USER_ROLE_MAP.AUTHOR]) // 需要写作权限
+  @SetMetadata('roles', [USER_ROLE_MAP.ADMIN]) // 需要管理员权限
   updateArticleCategory(@Body() body: UpdateCategoryDto) {
     return this.categoryService.updateArticleCategory(body);
+  }
+
+  /** 删除文章标签 */
+  @Post(':articleCategoryId/delete-category')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @SetMetadata('roles', [USER_ROLE_MAP.ADMIN]) // 需要管理员权限
+  deleteArticleCategory(@Param('articleCategoryId') articleCategoryId: string) {
+    return this.categoryService.deleteArticleCategory(+articleCategoryId);
   }
 }

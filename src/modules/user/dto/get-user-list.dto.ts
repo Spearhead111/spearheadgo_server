@@ -8,7 +8,7 @@ export class GetUserListDto {
   role: string; // 用户角色
 
   @IsNumber()
-  isActivated: number; // -1:查询全部 0:删除/注销用户  1:正常用户
+  status: number; // -1:查询全部 0:删除/注销用户  1:正常用户
 
   @IsNumber()
   pageNo: number;

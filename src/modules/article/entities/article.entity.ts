@@ -15,6 +15,7 @@ import { User } from 'src/modules/user/entities/user.entity';
 import { Category } from 'src/modules/category/entities/category.entity';
 import { ArticleComments } from './articleComments.entity';
 import { ArticleLikes } from './articleLike.entity';
+import { CommentReply } from './comment-reply.entity';
 
 @Entity()
 export class Article {
@@ -46,6 +47,10 @@ export class Article {
   // 与点赞的关系
   @OneToMany(() => ArticleLikes, (articleLikes) => articleLikes.article)
   articleLikes: ArticleLikes[];
+
+  // // 与【回复评论】的关系
+  // @OneToMany(() => CommentReply, (commentReply) => commentReply.article)
+  // commentReply: CommentReply[];
 
   @ManyToOne(() => User, (user) => user.articles, { eager: true })
   @JoinColumn({ name: 'author_id', referencedColumnName: 'id' })

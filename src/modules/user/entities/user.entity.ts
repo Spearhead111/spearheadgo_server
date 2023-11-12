@@ -11,6 +11,8 @@ import * as bcrypt from 'bcryptjs';
 import { Article } from 'src/modules/article/entities/article.entity';
 import { ArticleComments } from 'src/modules/article/entities/articleComments.entity';
 import { ArticleLikes } from 'src/modules/article/entities/articleLike.entity';
+import { ArticleCommentsLikes } from 'src/modules/article/entities/article-comments-like.entity';
+import { CommentReply } from 'src/modules/article/entities/comment-reply.entity';
 
 @Entity()
 export class User {
@@ -62,12 +64,26 @@ export class User {
   articles: Article[];
 
   // 与评论的关系
-  @OneToMany(() => ArticleComments, (articleComments) => articleComments.user)
+  @OneToMany(
+    () => ArticleComments,
+    (articleComments) => articleComments.commentBy,
+  )
   articleComments: ArticleComments[];
 
   // 与点赞的关系
   @OneToMany(() => ArticleLikes, (articleLikes) => articleLikes.user)
   articleLikes: ArticleLikes[];
+
+  // 与【评论点赞】的关系
+  @OneToMany(
+    () => ArticleCommentsLikes,
+    (articleCommentsLikes) => articleCommentsLikes.user,
+  )
+  commentsLike: ArticleCommentsLikes[];
+
+  // 与【"回复评论"】的关系
+  @OneToMany(() => CommentReply, (commentReply) => commentReply.commentBy)
+  commentReply: CommentReply[];
 
   @BeforeInsert()
   async encryptPwd() {

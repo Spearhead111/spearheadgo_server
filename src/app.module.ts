@@ -15,6 +15,9 @@ import { Article } from './modules/article/entities/article.entity';
 import { Category } from './modules/category/entities/category.entity';
 import { ArticleComments } from './modules/article/entities/articleComments.entity';
 import { ArticleLikes } from './modules/article/entities/articleLike.entity';
+import { ArticleCommentsLikes } from './modules/article/entities/article-comments-like.entity';
+import { CommentReply } from './modules/article/entities/comment-reply.entity';
+import { CommentReplyLike } from './modules/article/entities/comment-reply-like.entity';
 
 const envFilePath = `.env.${process.env.NODE_ENV || `development`}`;
 
@@ -49,7 +52,16 @@ const envFilePath = `.env.${process.env.NODE_ENV || `development`}`;
           username: configService.get(ConfigEnum.DB_USERNAME),
           password: configService.get(ConfigEnum.DB_PASSWORD),
           database: configService.get(ConfigEnum.DB_DATABASE),
-          entities: [User, Article, Category, ArticleComments, ArticleLikes],
+          entities: [
+            User,
+            Article,
+            Category,
+            ArticleComments,
+            ArticleLikes,
+            ArticleCommentsLikes,
+            CommentReply,
+            CommentReplyLike,
+          ],
           // 同步本地的schema与数据库 -> 初始化的时候去使用
           synchronize: configService.get(ConfigEnum.DB_SYNC),
           logging: process.env.NODE_ENV === 'development',

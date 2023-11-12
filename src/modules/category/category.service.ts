@@ -48,7 +48,6 @@ export class CategoryService {
 
   /** 更新文章标签 */
   async updateArticleCategory(updateCategoryDto: UpdateCategoryDto) {
-    console.log(updateCategoryDto);
     const category = await this.categoryRepository.findOne({
       where: {
         id: updateCategoryDto.id,
@@ -57,7 +56,7 @@ export class CategoryService {
     if (!category) {
       return {
         result_code: 'category_id_not_found',
-        message: '没找到该标签',
+        message: '文章标签id不存在',
       };
     }
     category.label = updateCategoryDto.label;
@@ -66,5 +65,28 @@ export class CategoryService {
     category.color = updateCategoryDto.color;
     category.iconColor = updateCategoryDto.iconColor;
     return await this.categoryRepository.save(category);
+  }
+
+  /** 删除文章标签 */
+  async deleteArticleCategory(id: number) {
+    const category = await this.categoryRepository.findOne({
+      where: {
+        id,
+      },
+      relations: ['articles'],
+    });
+    if (!category) {
+      return {
+        result_code: 'category_id_not_found',
+        message: '文章标签id不存在',
+      };
+    }
+    if (category.articles.length > 0) {
+      return {
+        result_code: 'category_has_realted_to_articles',
+        message: '当前有文章与该标签关联，无法删除',
+      }
+    }
+    return await this.categoryRepository.remove(category);
   }
 }
