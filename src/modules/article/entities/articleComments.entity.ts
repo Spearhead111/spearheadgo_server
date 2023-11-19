@@ -35,11 +35,14 @@ export class ArticleComments {
   @OneToMany(
     () => ArticleCommentsLikes,
     (articleCommentsLikes) => articleCommentsLikes.articleComment,
+    { onDelete: 'CASCADE' },
   )
   commentLikes: ArticleCommentsLikes[];
 
   // 评论的回复
-  @OneToMany(() => CommentReply, (commentReply) => commentReply.belongComment)
+  @OneToMany(() => CommentReply, (commentReply) => commentReply.belongComment, {
+    onDelete: 'CASCADE',
+  })
   commentReply: CommentReply[];
 
   @Column({ length: 255 })

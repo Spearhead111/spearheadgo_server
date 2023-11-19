@@ -19,6 +19,9 @@ export class ArticleLikes {
   @PrimaryGeneratedColumn()
   id: number;
 
+  @Column({ default: 0 })
+  status: number;
+
   // 与用户的关系，多对一
   @ManyToOne(() => User, (user) => user.articleLikes)
   @JoinColumn({ name: 'author_id', referencedColumnName: 'id' })

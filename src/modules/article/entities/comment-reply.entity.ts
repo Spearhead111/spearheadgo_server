@@ -44,6 +44,7 @@ export class CommentReply {
   @OneToMany(
     () => CommentReplyLike,
     (commentReplyLike) => commentReplyLike.articleComment,
+    { onDelete: 'CASCADE' },
   )
   commentLikes: CommentReplyLike[];
 

@@ -41,15 +41,18 @@ export class Article {
   @OneToMany(
     () => ArticleComments,
     (articleComments) => articleComments.article,
+    { onDelete: 'CASCADE' },
   )
   articleComments: ArticleComments[];
 
   // 与点赞的关系
-  @OneToMany(() => ArticleLikes, (articleLikes) => articleLikes.article)
+  @OneToMany(() => ArticleLikes, (articleLikes) => articleLikes.article, {
+    onDelete: 'CASCADE',
+  })
   articleLikes: ArticleLikes[];
 
   // // 与【回复评论】的关系
-  // @OneToMany(() => CommentReply, (commentReply) => commentReply.article)
+  // @OneToMany(() => CommentReply, (commentReply) => commentReply.article ,{ onDelete: 'CASCADE' })
   // commentReply: CommentReply[];
 
   @ManyToOne(() => User, (user) => user.articles, { eager: true })

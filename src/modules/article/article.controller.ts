@@ -13,6 +13,7 @@ import {
   Req,
   UseInterceptors,
   UploadedFile,
+  Headers,
 } from '@nestjs/common';
 import { ArticleService } from './article.service';
 import {
@@ -36,6 +37,8 @@ import { GetLatestArticleDto } from './dto/get-latest-article.dto';
 import { SendArticleCommentDto } from './dto/send-article-comment.dto';
 import { SendArticleCommentReplyDto } from './dto/send-article-comment-reply.dto';
 import { GetArticleCommentDto } from './dto/get-article-comment.dto';
+import { DeleteArticleCommentDto } from './dto/delete-article-comment.dto';
+import { LikeArticleCommentDto } from './dto/like-article-comment.dto';
 
 @ApiTags('文章')
 @Controller('article')
@@ -63,7 +66,6 @@ export class ArticleController {
         message: '图片大小超过限制',
       };
     }
-    console.log(file.originalname, file.type, file.size, body, user);
     // 拼接一下在cos上的路径
     const fileName = `img/article/banner_${
       (user as User).id
@@ -73,7 +75,6 @@ export class ArticleController {
       file.buffer,
       fileName,
     );
-    console.log(imgUrl);
     const createArticle = new CreateArticleDto();
     createArticle.title = body.title;
     createArticle.subtitle = body.subtitle;
@@ -134,6 +135,16 @@ export class ArticleController {
     return this.articleService.updateArticle(+id, updateArticleDto, user);
   }
 
+  /** 获取文章关联的用户信息 */
+  @Get(':articleId/get-article-user-info')
+  @UseGuards(AuthGuard('jwt'))
+  async getArticleUserInfo(
+    @Param('articleId') articleId: string,
+    @Req() { user },
+  ) {
+    return this.articleService.getArticleUserInfo(+articleId, user);
+  }
+
   /** 删除文章 */
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @SetMetadata('roles', [USER_ROLE_MAP.ADMIN])
@@ -166,13 +177,22 @@ export class ArticleController {
     return this.articleService.getLatestArticle(query);
   }
 
+  /** 点赞文章 */
+  @Get(':articleId/digging-article')
+  @UseGuards(AuthGuard('jwt'))
+  likeArticle(@Param('articleId') articleId: string, @Req() { user }) {
+    return this.articleService.likeArticle(+articleId, user);
+  }
+
   /** 获取文章评论 */
   @Get(':article_id/get-article-comment')
   getArticleComment(
     @Param('article_id') id: string,
     @Query() query: GetArticleCommentDto,
+    @Headers() headers: Record<string, string>,
   ) {
-    return this.articleService.getArticleComment(+id, query);
+    const userId = headers['user-id'];
+    return this.articleService.getArticleComment(+id, query, userId);
   }
 
   /** 发表文章评论 */
@@ -195,5 +215,23 @@ export class ArticleController {
     @Req() { user },
   ) {
     return this.articleService.sendArticleCommentReply(id, body, user);
+  }
+
+  /** 删除文章评论 */
+  @Post(':articleId/delete-article-comment')
+  @UseGuards(AuthGuard('jwt'))
+  deleteArticleComment(
+    @Param('articleId') id: number,
+    @Body() body: DeleteArticleCommentDto,
+    @Req() { user },
+  ) {
+    return this.articleService.deleteArticleComment(id, body, user);
+  }
+
+  /** 点赞评论 */
+  @Post('/digging-comments')
+  @UseGuards(AuthGuard('jwt'))
+  likeArticleComment(@Body() body: LikeArticleCommentDto, @Req() { user }) {
+    return this.articleService.likeArticleComment(body, user);
   }
 }

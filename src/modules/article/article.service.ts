@@ -15,6 +15,11 @@ import { SendArticleCommentReplyDto } from './dto/send-article-comment-reply.dto
 import { ArticleComments } from './entities/articleComments.entity';
 import { GetArticleCommentDto } from './dto/get-article-comment.dto';
 import { CommentReply } from './entities/comment-reply.entity';
+import { ArticleCommentsLikes } from './entities/article-comments-like.entity';
+import { DeleteArticleCommentDto } from './dto/delete-article-comment.dto';
+import { CommentReplyLike } from './entities/comment-reply-like.entity';
+import { LikeArticleCommentDto } from './dto/like-article-comment.dto';
+import { ArticleLikes } from './entities/articleLike.entity';
 
 @Injectable()
 export class ArticleService {
@@ -23,12 +28,18 @@ export class ArticleService {
     @InjectRepository(Article)
     private readonly articleRepository: Repository<Article>,
     // 要想在别的模块中使用别的repository<实体>必须要在当前模块的imports的TypeOrmModule.forFeature([])中加入这个实体
+    @InjectRepository(ArticleLikes)
+    private readonly articleLikesRepository: Repository<ArticleLikes>,
     @InjectRepository(Category)
     private readonly categoryRepository: Repository<Category>,
     @InjectRepository(ArticleComments)
     private readonly articleCommentsRepository: Repository<ArticleComments>,
     @InjectRepository(CommentReply)
     private readonly commentReplyRepository: Repository<CommentReply>,
+    @InjectRepository(ArticleCommentsLikes)
+    private readonly articleCommentsLikesRepository: Repository<ArticleCommentsLikes>,
+    @InjectRepository(CommentReplyLike)
+    private readonly commentReplyLikeRepository: Repository<CommentReplyLike>,
   ) {}
 
   /** 创建文章 */
@@ -178,30 +189,26 @@ export class ArticleService {
     if (!article) {
       return { result_code: 'article_id_not_found', message: '文章不存在' };
     }
-    const count = await this.articleRepository
-      .createQueryBuilder('article')
-      .leftJoin('article.articleComments', 'comments')
-      .leftJoin('article.articleLikes', 'likes')
-      .select(['COUNT(DISTINCT likes.id) AS likeCount'])
-      .where({ id }) // 根据文章的 ID 进行过滤
-      .andWhere({ isActivated: 1 })
-      .groupBy('article.id')
+    // 查询评论总数
+    const { commentTotalCount } = await this.articleCommentsRepository
+      .createQueryBuilder('articleComment')
+      .leftJoin('articleComment.commentReply', 'commentReply')
+      .where('articleComment.article = :article', { article: id })
+      .select(
+        'COUNT(DISTINCT articleComment.id) + COUNT(DISTINCT commentReply.id)',
+        'commentTotalCount',
+      )
       .getRawOne();
-
-    const articleComments = await this.articleCommentsRepository
-      .createQueryBuilder('articleComments')
-      .leftJoinAndSelect('articleComments.article', 'article')
-      .leftJoinAndSelect('articleComments.commentReply', 'commentReply')
-      .where('article.id = :id', { id })
-      .getMany();
-    let commentCount = 0;
-    articleComments.forEach((comment) => {
-      commentCount += comment.commentReply.length + 1;
-    });
+    //  查询点赞数
+    const likeCount = await this.articleLikesRepository
+      .createQueryBuilder('articleLikes')
+      .where('articleLikes.article = :articleId', { articleId: id })
+      .andWhere('articleLikes.status = 1')
+      .getCount();
 
     const data = Object.assign(article, {
-      commentCount: commentCount,
-      likeCount: Number(count.likeCount),
+      commentCount: Number(commentTotalCount),
+      likeCount: Number(likeCount),
     });
 
     if (data) {
@@ -209,6 +216,21 @@ export class ArticleService {
     } else {
       return { result_code: 'article_id_not_found', message: '没找到文章' };
     }
+  }
+
+  /** 获取文章关联的用户信息 */
+  async getArticleUserInfo(articleId: number, user: User) {
+    const like = await this.articleLikesRepository
+      .createQueryBuilder('articleLike')
+      .leftJoin('articleLike.article', 'article')
+      .leftJoin('articleLike.user', 'user')
+      .where(
+        'article.id = :articleId AND user.id = :userId AND articleLike.status = 1',
+        { articleId, userId: user.id },
+      )
+      .getOne();
+
+    return { data: { isLiked: !!like } };
   }
 
   // 更新文章
@@ -256,6 +278,43 @@ export class ArticleService {
     // 保存更新后的文章
     const updatedArticle = await this.articleRepository.save(article);
     return { data: { articleId: updatedArticle.id } };
+  }
+
+  /** 点赞文章 */
+  async likeArticle(articleId: number, user: User) {
+    const article = await this.articleRepository.findOne({
+      where: { id: articleId },
+    });
+    if (!article) {
+      return {
+        result_code: 'article_id_not_found',
+        message: '文章不存在',
+      };
+    }
+    const like = await this.articleLikesRepository
+      .createQueryBuilder('al')
+      .leftJoin('al.article', 'article')
+      .leftJoin('al.user', 'user')
+      .where('article.id = :articleId AND user.id = :userId', {
+        articleId,
+        userId: user.id,
+      })
+      .getOne();
+
+    if (like) {
+      // 之前有点赞记录,直接更改status
+      like.status = like.status ? 0 : 1;
+      return await this.articleLikesRepository.save(like);
+    } else {
+      // 之前没有点赞记录,新建一条记录
+      const articleLike = this.articleLikesRepository.create({
+        status: 1,
+        // @ts-ignore
+        user: user,
+        article: article,
+      });
+      return await this.articleLikesRepository.save(articleLike);
+    }
   }
 
   /** 根据文章id删除文章(更改字段) */
@@ -394,7 +453,6 @@ export class ArticleService {
       .limit(pageSize)
       .getMany();
 
-    console.log(categories);
     articles.forEach((article: any, index: number) => {
       article.createTime = article.createTime.getTime();
       article.tags = categories[index]?.categories || [];
@@ -403,7 +461,11 @@ export class ArticleService {
   }
 
   /** 获取文章评论 */
-  async getArticleComment(id: number, query: GetArticleCommentDto) {
+  async getArticleComment(
+    id: number,
+    query: GetArticleCommentDto,
+    userId: string,
+  ) {
     const article = await this.articleRepository.findOne({
       where: { id, isActivated: 1 },
     });
@@ -412,45 +474,96 @@ export class ArticleService {
     }
     const { pageNo, pageSize } = query;
     const skip = (pageNo - 1) * pageSize;
-    const comments = await this.articleCommentsRepository
+    const [comments, count] = await this.articleCommentsRepository
       .createQueryBuilder('articleComment')
       .leftJoinAndSelect('articleComment.commentBy', 'commentBy')
-      .leftJoinAndSelect('articleComment.commentReply', 'commentReply')
       .leftJoinAndSelect('articleComment.commentLikes', 'commentLikes')
-      .leftJoinAndSelect('commentReply.commentBy', 'commentReplyCommentBy')
-      .leftJoinAndSelect('commentReply.commentLikes', 'commentReplyLikes')
-      .leftJoinAndSelect('commentReply.replyToUser', 'replyToUser')
+      .addSelect(
+        'COUNT(CASE WHEN commentLikes.status = 1 THEN 1 ELSE null END)',
+        'commentLikesCount',
+      )
       .where('articleComment.article = :article', { article: id })
-      .orderBy('articleComment.createTime', 'DESC')
+      .addGroupBy('articleComment.id')
+      .addOrderBy('commentLikesCount', 'DESC') // 文章的评论先按点赞降序
+      .addOrderBy('articleComment.createTime', 'DESC') // 再按照文章评论时间降序
       .offset(skip)
       .limit(pageSize)
-      .getMany();
-    let count = 0;
-    const commentsRes = comments.map((comment) => {
-      let newComment: any = {};
-      newComment.id = comment.id;
-      // @ts-ignore
-      newComment.createTime = comment.createTime.getTime();
-      newComment.content = comment.content;
-      newComment.commentBy = comment.commentBy.nickname;
-      newComment.commentById = comment.commentBy.id;
-      newComment.commentByAvatar = comment.commentBy.avatar;
-      newComment.commentLikes = comment.commentLikes.length;
-      newComment.replyComment = comment.commentReply.map((commentReply) => {
-        return {
-          ...commentReply,
-          // @ts-ignore
-          createTime: commentReply.createTime.getTime(),
-          commentBy: commentReply.commentBy.nickname,
-          commentByAvatar: commentReply.commentBy.avatar,
-          commentById: commentReply.commentBy.id,
-          commentLikes: commentReply.commentLikes.length,
-          replyTo: commentReply.replyToUser.nickname,
-        };
-      });
-      count += comment.commentReply.length + 1;
-      return newComment;
-    });
+      .getManyAndCount();
+
+    const commentsRes = await Promise.all(
+      comments.map(async (comment) => {
+        let newComment: any = {};
+        newComment.id = comment.id;
+        // @ts-ignore
+        newComment.createTime = comment.createTime.getTime();
+        newComment.content = comment.content;
+        newComment.commentBy = comment.commentBy.nickname;
+        newComment.commentById = comment.commentBy.id;
+        newComment.commentByAvatar = comment.commentBy.avatar;
+        newComment.commentLikes = comment.commentLikes.filter(
+          (like) => like.status === 1,
+        ).length;
+        // 判断当前用户是否点赞评论
+        newComment.isLiked = !!(await this.articleCommentsLikesRepository
+          .createQueryBuilder('acl')
+          .leftJoin('acl.articleComment', 'articleComment')
+          .leftJoin('acl.user', 'user')
+          .where(
+            'articleComment.id = :commentId AND user.id = :userId AND acl.status = :status',
+            {
+              commentId: comment.id,
+              userId: userId,
+              status: 1,
+            },
+          )
+          .getOne());
+
+        const commentReplys = await this.commentReplyRepository
+          .createQueryBuilder('commentReply')
+          .leftJoinAndSelect('commentReply.commentBy', 'commentReplyCommentBy')
+          .leftJoinAndSelect('commentReply.commentLikes', 'commentReplyLikes')
+          .leftJoinAndSelect('commentReply.replyToUser', 'replyToUser')
+          .where('commentReply.belongComment = :commentId', {
+            commentId: comment.id,
+          })
+          .orderBy('commentReply.createTime', 'DESC')
+          .getMany();
+        newComment.replyComment = await Promise.all(
+          commentReplys.map(async (commentReply) => {
+            // 判断当前用户是否点赞评论
+            const isLiked = !!(await this.commentReplyLikeRepository
+              .createQueryBuilder('cpl')
+              .leftJoin('cpl.articleComment', 'articleComment')
+              .leftJoin('cpl.user', 'user')
+              .where(
+                'articleComment.id = :commentId AND user.id = :userId AND cpl.status = :status',
+                {
+                  commentId: commentReply.id,
+                  userId: userId,
+                  status: 1,
+                },
+              )
+              .getOne());
+            const newCommentReply = {
+              ...commentReply,
+              // @ts-ignore
+              createTime: commentReply.createTime.getTime(),
+              commentBy: commentReply.commentBy.nickname,
+              commentByAvatar: commentReply.commentBy.avatar,
+              commentById: commentReply.commentBy.id,
+              commentLikes: commentReply.commentLikes.filter(
+                (like) => like.status === 1,
+              ).length,
+              replyTo: commentReply.replyToUser.nickname,
+              isLiked,
+            };
+            delete newCommentReply.replyToUser;
+            return newCommentReply;
+          }),
+        );
+        return newComment;
+      }),
+    );
     return {
       data: {
         has_next: (pageNo - 1) * pageSize + pageSize < count,
@@ -524,5 +637,93 @@ export class ArticleService {
     articleReplyComment.replyToUser = replyToComment.commentBy;
     articleReplyComment.isReplyToTop = sendArticleCommentReplyDto.isReplyToTop;
     return await this.commentReplyRepository.save(articleReplyComment);
+  }
+
+  /** 删除文章评论 */
+  async deleteArticleComment(
+    articleId: number,
+    deleteArticleCommentDto: DeleteArticleCommentDto,
+    user: User,
+  ) {
+    const commentsRepository = deleteArticleCommentDto.type
+      ? this.commentReplyRepository
+      : this.articleCommentsRepository;
+    const article = await this.articleRepository.findOne({
+      where: { id: articleId, isActivated: 1 },
+    });
+    if (!article) {
+      // 判断文章是否还存在
+      return { result_code: 'article_id_not_found', message: '文章不存在' };
+    }
+
+    const articleComment = await commentsRepository
+      .createQueryBuilder('articleComment')
+      .leftJoinAndSelect('articleComment.commentBy', 'commentBy')
+      .where({ id: +deleteArticleCommentDto.commentId })
+      .getOne();
+    if (!articleComment) {
+      return { result_code: 'comment_id_not_found', message: '评论不存在' };
+    } else if (
+      // 判断是否有权删除(需要是评论者或者是ROOT或者ADMIN用户)
+      articleComment.commentBy.id !== user.id &&
+      user.role !== USER_ROLE_MAP.ADMIN &&
+      user.role !== USER_ROLE_MAP.ROOT
+    ) {
+      return { result_code: 'has_no_permission', message: '无权操作' };
+    }
+    try {
+      // 1.解除外键关联
+      await commentsRepository.query('SET foreign_key_checks = 0');
+      // 2.执行删除语句
+      await commentsRepository.delete(articleComment.id);
+      // 3.重新关联外键
+      await commentsRepository.query('SET foreign_key_checks = 1');
+    } catch (e) {
+      throw new Error(e);
+    }
+  }
+
+  /** 点赞文章评论 */
+  async likeArticleComment(body: LikeArticleCommentDto, user: User) {
+    const commentsRepository = body.type
+      ? this.commentReplyLikeRepository
+      : this.articleCommentsLikesRepository;
+    const commentLike = await commentsRepository
+      .createQueryBuilder('commentLike')
+      .leftJoin('commentLike.articleComment', 'articleComment')
+      .leftJoin('commentLike.article', 'article')
+      .leftJoin('commentLike.user', 'user')
+      .where(
+        'articleComment.id = :id AND article.id = :articleId AND user.id = :userId',
+        {
+          id: +body.commentId,
+          articleId: +body.articleId,
+          userId: user.id,
+        },
+      )
+      .getOne();
+    if (commentLike) {
+      // 如果存在直接改值
+      commentLike.status = commentLike.status ? 0 : 1;
+      await (
+        commentsRepository as Repository<
+          ArticleCommentsLikes | CommentReplyLike
+        >
+      ).save(commentLike);
+    } else {
+      // 不存在点赞记录,添加一条
+      const newCommentLike = commentsRepository.create();
+      // @ts-ignore
+      newCommentLike.articleComment = body.commentId;
+      // @ts-ignore
+      newCommentLike.article = body.articleId;
+      newCommentLike.status = 1;
+      newCommentLike.user = user;
+      return await (
+        commentsRepository as Repository<
+          ArticleCommentsLikes | CommentReplyLike
+        >
+      ).save(newCommentLike);
+    }
   }
 }

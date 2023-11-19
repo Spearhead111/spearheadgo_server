@@ -22,6 +22,7 @@ import { GetUserListDto } from './dto/get-user-list.dto';
 import { USER_ROLE_MAP } from 'src/constants/common';
 import { ChangeUserStatusDto } from './dto/change-user-status.dto';
 import { ConfigService } from '@nestjs/config';
+import { checkAuthLT } from 'src/utils';
 
 @ApiTags('用户')
 @Controller('user')
@@ -53,10 +54,12 @@ export class UserController {
     return this.userService.findOne(id);
   }
 
+  /** 更新用户信息 */
   @Post(':id/update-user')
   @UseGuards(AuthGuard('jwt'))
-  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
-    return this.userService.update(id, updateUserDto);
+  @SetMetadata('roles', [USER_ROLE_MAP.ADMIN]) // 至少需要 admin 权限
+  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto, @Req() { user }) {
+    return this.userService.update(id, updateUserDto, user);
   }
 
   @Get(':id/delete-user')

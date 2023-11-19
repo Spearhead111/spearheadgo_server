@@ -26,7 +26,7 @@ export class LocalStrategy extends PassportStrategy(Strategy) {
       .getOne();
 
     if (!user) {
-      throw new BadRequestException('用户名不正确！');
+      throw new BadRequestException('用户名不存在！');
     }
     const decodedPassword = Base64.decode(Base64.decode(password));
     if (!compareSync(decodedPassword, user.password)) {

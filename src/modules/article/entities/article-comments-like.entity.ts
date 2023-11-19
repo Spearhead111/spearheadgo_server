@@ -20,6 +20,9 @@ export class ArticleCommentsLikes {
   @PrimaryGeneratedColumn({ name: 'article_comment_like_id' })
   id: number;
 
+  @Column({ default: 0 })
+  status: number;
+
   // 点赞的评论
   @ManyToOne(
     () => ArticleComments,
@@ -30,11 +33,11 @@ export class ArticleCommentsLikes {
 
   // 与用户的关系，多对一
   @ManyToOne(() => User, (user) => user.commentsLike)
-  @JoinColumn({ name: 'author_id', referencedColumnName: 'id' })
+  @JoinColumn({ name: 'user_id', referencedColumnName: 'id' })
   user: User;
 
   // 与文章的关系，多对一
-  @ManyToOne(() => Article, (article) => article.articleLikes)
+  @ManyToOne(() => Article)
   @JoinColumn({ name: 'article_id', referencedColumnName: 'id' })
   article: Article;
 

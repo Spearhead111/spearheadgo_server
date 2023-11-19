@@ -8,6 +8,7 @@ import { Base64 } from 'js-base64';
 import { GetUserListDto } from './dto/get-user-list.dto';
 import { ChangeUserStatusDto } from './dto/change-user-status.dto';
 import { USER_ROLE_MAP } from 'src/constants/common';
+import { checkAuthLT } from 'src/utils';
 
 @Injectable()
 export class UserService {
@@ -120,8 +121,24 @@ export class UserService {
     return user;
   }
 
-  update(id: string, updateUserDto: UpdateUserDto) {
-    return `This action updates a #${id} user`;
+  /** 更新用户信息 */
+  async update(id: string, updateUserDto: UpdateUserDto, user: User) {
+    const userInfo = await this.userRepository.findOne({ where: { id } });
+    if (!userInfo) {
+      return { result_code: 'user_id_not_found', message: '用户不存在' };
+    }
+    // 判断操作用户是否有权限改目标用户信息
+    // 1. 做操作的用户的权限必须大于更改目标的原始权限
+    // 2. 做操作的用户的权限不许大于更改目标要更改的权限
+    if (
+      !checkAuthLT(user.role, userInfo.role) ||
+      !checkAuthLT(user.role, updateUserDto.role)
+    ) {
+      return { result_code: 'has_no_permission', message: '无权操作' };
+    }
+    userInfo.role = updateUserDto.role;
+
+    return await this.userRepository.save(userInfo);
   }
 
   async remove(id: string) {
