@@ -6,9 +6,15 @@ import rateLimit from 'express-rate-limit';
 import * as cors from 'cors';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import 'reflect-metadata';
+import { Logger } from '@nestjs/common';
+import { IS_DEV } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const logger: Logger = new Logger('main.ts');
+  const app = await NestFactory.create(AppModule, {
+    // 开启日志级别打印
+    logger: IS_DEV ? ['log', 'debug', 'error', 'warn'] : ['error', 'warn'],
+  });
   // 全局注册成功的过滤器
   app.useGlobalInterceptors(new TransformInterceptor());
   // 全局注册错误的过滤器

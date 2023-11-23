@@ -19,7 +19,8 @@ import { ArticleCommentsLikes } from './modules/article/entities/article-comment
 import { CommentReply } from './modules/article/entities/comment-reply.entity';
 import { CommentReplyLike } from './modules/article/entities/comment-reply-like.entity';
 
-const envFilePath = `.env.${process.env.NODE_ENV || `development`}`;
+const envFilePath = `.env.${process.env.RUNNING_ENV || `development`}`;
+export const IS_DEV = process.env.RUNNING_ENV !== 'production';
 
 @Module({
   imports: [
