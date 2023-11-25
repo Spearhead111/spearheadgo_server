@@ -79,7 +79,7 @@ export class ArticleService {
       .leftJoinAndSelect('article.author', 'author')
       .leftJoinAndSelect('article.articleComments', 'comments')
       .leftJoinAndSelect('comments.commentReply', 'commentReply')
-      .leftJoinAndSelect('article.articleLikes', 'likes')
+      .leftJoinAndSelect('article.articleLikes', 'likes', 'likes.status = 1')
       .leftJoinAndSelect('article.categories', 'categories')
       .select([
         'article.id',
@@ -556,6 +556,7 @@ export class ArticleService {
               ).length,
               replyTo: commentReply.replyToUser.nickname,
               isLiked,
+              isReplyToTop: !!commentReply.isReplyToTop,
             };
             delete newCommentReply.replyToUser;
             return newCommentReply;
