@@ -358,7 +358,7 @@ export class ArticleService {
       .select([
         'article.id AS id',
         'article.title AS title',
-        'COUNT(CASE WHEN likes.status = 1 THEN 1 else NULL END) AS likes',
+        'COUNT(DISTINCT CASE WHEN likes.status = 1 THEN likes.id END) AS likes',
         'author.nickname AS author',
         'updateBy.nickname AS updateBy',
         'article.createTime AS createTime',
@@ -394,6 +394,7 @@ export class ArticleService {
       };
     }
     const list = await query.getRawMany();
+    console.log(list);
 
     // 查询文章的类别信息
     const articleIds = list.map((article) => article.id);
