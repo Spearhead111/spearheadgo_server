@@ -358,7 +358,7 @@ export class ArticleService {
       .select([
         'article.id AS id',
         'article.title AS title',
-        'CAST(COUNT(DISTINCT likes.id) AS SIGNED) AS likes', // 使用 CAST 转换为数字类型
+        'COUNT(CASE WHEN likes.status = 1 THEN 1 else NULL END) AS likes',
         'author.nickname AS author',
         'updateBy.nickname AS updateBy',
         'article.createTime AS createTime',
