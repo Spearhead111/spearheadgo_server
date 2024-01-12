@@ -50,7 +50,7 @@ export class AuthController {
     if (size > 1024 * 1024 * this.configService.get('UP_IMG_LIMIT')) {
       return {
         result_code: 'file_exceed_limit',
-        message: '上传图片大小不能超过1M',
+        message: '上传图片大小不能超过2M',
       };
     }
     const cos = new COS({
@@ -70,6 +70,8 @@ export class AuthController {
     ); // 获取上传url
     const imgUrl = this.configService.get('BUCKET_DOMAIN') + params.Key; // 图片上传成功后的url
     const data = { imgUrl: imgUrl, uploadUrl: url };
-    return url ? { data } : { result_code: 'upload_failed', message: '上传失败' };
+    return url
+      ? { data }
+      : { result_code: 'upload_failed', message: '上传失败' };
   }
 }

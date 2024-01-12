@@ -60,7 +60,7 @@ export class ArticleController {
     @Req() { user },
   ) {
     // 判断封面图片大小是否超过限制
-    if (file.size > 1024 * 1024 * 1) {
+    if (file.size > 1024 * 1024 * 2) {
       return {
         result_code: 'bannerimg_exceed_limitation',
         message: '图片大小超过限制',
@@ -115,7 +115,7 @@ export class ArticleController {
   ) {
     if (file) {
       // 判断封面图片大小是否超过限制
-      if (file.size > 1024 * 1024 * 1) {
+      if (file.size > 1024 * 1024 * 2) {
         return {
           result_code: 'bannerimg_exceed_limitation',
           message: '图片大小超过限制',
