@@ -8,7 +8,7 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import 'reflect-metadata';
 import { Logger } from '@nestjs/common';
 import { IS_DEV } from './app.module';
-
+console.log(process.env);
 async function bootstrap() {
   const logger: Logger = new Logger('main.ts');
   const app = await NestFactory.create(AppModule, {
